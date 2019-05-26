@@ -58,7 +58,7 @@ else
                     succeded=false
 
                     if $connected && ! $activated; then
-                        counter=1
+                        counter=0
                         while $run && ! $succeded && (( $counter <= $tries )); do
                             succeded=$(nmcli con up id $name | {
                                 read -r input
