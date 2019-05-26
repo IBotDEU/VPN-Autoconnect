@@ -1,0 +1,84 @@
+#!/bin/sh
+
+run=true
+
+_term() {
+    run=false
+}
+
+trap _term SIGTERM SIGINT
+
+if ! ((( $# > 0 )) && [[ $1 == "--help" ]]) && (( $# != 3 )); then
+    echo "Error: Illegal number of parameters."
+else
+    if [[ $1 == "--help" ]]; then
+        echo "Usage: vpn-autoconnect 'name of network' 'number of reconnect tries' 'update interval in seconds'"
+    else
+        if ! [[ $2 =~ ^[0-9]+$ ]]; then
+            echo "Error: $2 is not a valid number."
+        elif ! [[ $3 =~ ^[0-9]+$ ]]; then
+            echo "Error: $3 is not a valid number."
+        else
+            name=$1
+            tries=$2
+            update=$3
+
+            exists=$(nmcli con show "$name" | {
+                read -r input
+
+                if (( ${#input} > 0 )); then
+                    echo true
+                else
+                    echo false
+                fi
+            })
+
+            if $exists; then
+                while $run; do
+                    connected=$(nmcli network connectivity check | {
+                        read -r input
+
+                        if [[ $input == "full" ]]; then
+                            echo true
+                        else
+                            echo false
+                        fi
+                    })
+
+                    activated=$(nmcli -g GENERAL.STATE con show "$name" | {
+                        read -r input
+
+                        if [[ $input == "activated" ]]; then
+                            echo true
+                        else
+                            echo false
+                        fi
+                    })
+
+                    succeded=false
+
+                    if $connected && ! $activated; then
+                        counter=1
+                        while $run && ! $succeded && (( $counter <= $tries )); do
+                            succeded=$(nmcli con up id $name | {
+                                read -r input
+                                input=${input%%(*}
+                                input=${input%?}
+
+                                if [[ $input == "Verbindung wurde erfolgreich aktiviert" ]]; then
+                                    echo true
+                                else
+                                    echo false
+                                fi
+                            })
+
+                            counter=$(($counter + 1))
+                        done
+                    fi
+
+                    sleep $update
+                done
+            fi
+        fi
+    fi
+fi
